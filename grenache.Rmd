@@ -1,0 +1,1077 @@
+---
+title: "Vigne (cépage grenache)"
+author: "Althéa"
+date: "17/03/2022"
+output: html_document
+---
+
+=====================================
+#Import data and packages
+=====================================
+
+#Packages 
+```{r}
+packages_to_install <- c("ggplot2", "magrittr", "dplyr", "tidyr", "ggpubr", "patchwork", "hrbrthemes")
+if (length(setdiff(packages_to_install, rownames(installed.packages()))) > 0) {
+  install.packages(setdiff(packages_to_install, rownames(installed.packages())))
+}
+```
+
+
+#Libraries
+```{r}
+libraries_to_load <- c("ggplot2", "magrittr", "dplyr", "tidyr", "ggpubr", "patchwork", "hrbrthemes")
+for (package in libraries_to_load) {
+  if (!require(package, character.only = TRUE)) {
+    install.packages(package)
+    library(package, character.only = TRUE)
+  } else {
+    library(package, character.only = TRUE)
+  }
+}
+```
+
+#Your files
+```{r}
+file_rouen = "put here the path to the rouen file"
+file_montelimar = "put here the path to the montelimar file"
+```
+
+#Importation of data
+```{r}
+read_data <- function(filename) {
+  data <- read.table(filename, sep = ";", dec = ".", header = TRUE)
+  colnames(data)[1:2] <- c("JJ", "Annee")
+  return(data)
+}
+
+rouen <- read_data(file_rouen)
+montelimar <- read_data(file_montelimar)
+
+summary(rouen)
+View(rouen)
+summary(montelimar)
+View(montelimar)
+```
+
+==========================
+#Treatments for rouen
+==========================
+
+#Add varialbe with date
+```{r}
+date <- as.Date(paste(rouen$Annee, rouen$Mois, rouen$Jour, sep = "-"))
+rouen <- cbind.data.frame(rouen,date)
+```
+
+#Add seasons
+```{r}
+saison <- factor(rouen$Mois)
+levels(saison) <- c("H","H","P","P","P","E","E","E","A","A","A","H")
+rouen <- cbind.data.frame(rouen, saison)
+summary(rouen)
+```
+
+#Add vegetative seasons
+```{r}
+veg <- factor(rouen$Mois)
+levels(veg) <- c("HIV","HIV","HIV","VEG","VEG","VEG","VEG","VEG","VEG","VEG","HIV","HIV")
+rouen <- cbind.data.frame(rouen, veg)
+summary(rouen)
+```
+
+#Visualize temporal variation
+```{r}
+# Function to calculate mean and set column names
+calculate_mean <- function(data, variable_name) {
+  mean_data <- as.data.frame(aggregate(data[[variable_name]], by = list(data$Annee), FUN = mean))
+  colnames(mean_data) <- c("Annee", paste("Mean_", variable_name, sep = ""))
+  return(mean_data)
+}
+
+# Calculate means for different variables
+TX_moy <- calculate_mean(rouen, "TX")
+TN_moy <- calculate_mean(rouen, "TN")
+TM_moy <- calculate_mean(rouen, "TM")
+P_moy <- calculate_mean(rouen, "P")
+
+# Merge the mean datasets
+T_moy <- Reduce(function(x, y) merge(x, y, by = "Annee"), list(TX_moy, TN_moy, TM_moy, P_moy))
+
+# Summary of the merged dataset
+summary(T_moy)
+```
+
+```{r}
+# Set global theme
+theme_set(theme_bw())
+
+# Load data
+data("T_moy", package = "ggplot2")
+
+# Create a function to plot temperature data
+plot_temperature <- function(data, title) {
+  temperatureColor <- "#A45488"
+  
+  ggplot(data, aes(x = Annee)) +
+    geom_line(aes(y = Mean_TX, color = "TempMax"), size = 0.8) +
+    geom_line(aes(y = Mean_TM, color = "TempMoyen"), size = 0.8) +
+    geom_line(aes(y = Mean_TN, color = "TempMin"), size = 0.8) +
+    geom_smooth(aes(y = Mean_TX, color = "TempMax"), method = "lm", se = FALSE) +
+    geom_smooth(aes(y = Mean_TM, color = "TempMoyen"), method = "lm", se = FALSE) +
+    geom_smooth(aes(y = Mean_TN, color = "TempMin"), method = "lm", se = FALSE) +
+    labs(title = title, x = "Années", y = "Températures (en °C)") +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    scale_color_manual(name = "Légende", breaks = c("TempMax", "TempMoyen", "TempMin"),
+                       values = c("#A33741", "#A45488", "#D4986D"))
+}
+
+# Create a function to plot precipitation data
+plot_precipitation <- function(data, title) {
+  precipitationColor <- "#246A60"
+  coeff <- 5
+  
+  ggplot(data, aes(x = Annee, y = Mean_P)) +
+    geom_line(color = precipitationColor, size = 0.5) +
+    stat_smooth(method = "lm", se = FALSE) +
+    stat_regline_equation(label.x = 2005, label.y = 1.7) +
+    labs(title = title, x = "Years", y = "Precipitations (en mm)") +
+    theme(plot.title = element_text(hjust = 0.5))
+}
+
+# Create plots
+plot_temperature(T_moy, "Annual temperatures at Rouen between 1968 and 2020")
+plot_precipitation(T_moy, "Annual temperatures at Rouen between 1968 and 2020")
+-
+```
+
+
+#Number of days of spring frost
+```{r}
+summary(rouen)
+gel <- as.data.frame(aggregate(rouen$Gel, by = list(rouen$Annee), FUN = sum))
+colnames(gel)[1] <- c("Annee")
+colnames(gel)[2] <- c("Somme_Gel")
+summary(gel)
+```
+
+#Number of days of lethal values (< -25°C)
+```{r}
+letal <- as.data.frame(aggregate(rouen$valeur_letale, by = list(rouen$Annee), FUN = sum))
+colnames(letal)[1] <- c("Annee")
+colnames(letal)[2] <- c("Somme_letal")
+summary(letal)
+View(letal)
+```
+
+#Number of days of heat waves (>25°C)
+```{r}
+vague <- as.data.frame(aggregate(rouen$V_chaleur, by = list(rouen$Annee), FUN = sum))
+colnames(vague)[1] <- c("Annee")
+colnames(vague)[2] <- c("Somme_vague")
+summary(vague)
+```
+
+#Number of days of heat stress (>30°C)
+```{r}
+stress <- as.data.frame(aggregate(rouen$stress_thermique, by = list(rouen$Annee), FUN = sum))
+colnames(stress)[1] <- c("Annee")
+colnames(stress)[2] <- c("Somme_stress")
+summary(stress)
+```
+
+#Number of days of excessive temperatures (>35°C)
+```{r}
+excessif <- as.data.frame(aggregate(rouen$T_excessif, by = list(rouen$Annee), FUN = sum))
+colnames(excessif)[1] <- c("Annee")
+colnames(excessif)[2] <- c("Somme_T_excessif")
+summary(excessif)
+```
+
+#Number of rainy days
+```{r}
+J_pluie <- as.data.frame(aggregate(rouen$J_Pluie, by = list(rouen$Annee), FUN = sum))
+colnames(J_pluie)[1] <- c("Annee")
+colnames(J_pluie)[2] <- c("Somme_J_pluie")
+summary(J_pluie)
+```
+
+#Merge
+```{r}
+M1 <- merge(P_moy, gel, by = "Annee")
+M2 <- merge(M1, letal, by = "Annee")
+M3 <- merge(M2, vague, by = "Annee")
+M4 <- merge(M3, stress, by = "Annee")
+M5 <- merge(M4, excessif, by = "Annee")
+Mfinal <- merge(M5, J_pluie, by = "Annee")
+
+summary(Mfinal)
+```
+
+#Visualisation
+```{r}
+#Visualisation pour les températures
+options(scipen=999)
+data("Mfinal", package = "ggplot2")
+theme_set(theme_bw())
+
+
+ggplot (data = Mfinal, aes(x = Annee))+
+  geom_line(aes(y = Somme_Gel, colour = "Nombre de jours de gel"), size = 0.5)+
+  geom_line(aes(y = Somme_vague, colour = "Nombre de jours où T > 25°C"), size = 0.5)+
+  geom_line(aes(y = Somme_stress, colour = "Nombre de jours où T > 30°C"), size = 0.5)+
+  geom_line(aes(y = Somme_T_excessif, colour = "Nombre de jours où T > 35°C"), size = 0.5)+
+  
+  geom_smooth(aes(y = Somme_Gel, colour = "Nombre de jours de gel"),  method = "lm", se = FALSE, size = 0.5)+
+  geom_smooth(aes(y = Somme_stress, colour = "Nombre de jours où T > 30°C"),  method = "lm", se = FALSE, size = 0.5)+
+
+  
+  labs(title = "Nombre de jours aux températures\nextrêmes à Rouen entre 1968 et 2020", x = "Années", y = "Jours")+
+  theme(plot.title=element_text(hjust=0.5))+
+  scale_color_manual(name = "Légende", breaks = c("Nombre de jours de gel", "Nombre de jours où T > 25°C", "Nombre de jours où T > 30°C", "Nombre de jours où T > 35°C"), values = c("#44857C", "#809F36", "#822C64", "#A33741"))
+```
+
+```{r}
+#Visualisation pour les précipitations
+jourColor <- "#809F36"
+precipitationColor <- "#44857C"
+coeff <- 50
+
+ggplot(Mfinal, aes(x=Annee)) +
+  geom_line(aes(y=Mean_P), size=0.8, color=temperatureColor) + 
+  geom_line(aes(y=Somme_J_pluie/coeff), size=0.3, color=precipitationColor) +
+  scale_y_continuous(name = "Précipitations (en mm)", sec.axis = sec_axis(~.*coeff, name="Nombre de jour de pluie")) + 
+  geom_smooth(aes(y = Mean_P),  method = "lm", se = FALSE, size = 0.5, color=temperatureColor)+
+  geom_smooth(aes(y = Somme_J_pluie/coeff),  method = "lm", se = FALSE, size = 0.5, color=precipitationColor)+
+  
+  theme_ipsum() +
+  labs(title = "Précipitations et nombre de jour de pluie\nà Rouen entre 1968 et 2020")+
+  theme(
+    plot.title=element_text(hjust=0.5),
+    axis.title.y = element_text(color = temperatureColor, size=13),
+    axis.title.y.right = element_text(color = precipitationColor, size=10)
+  )
+```
+
+
+#Indice de Winkler
+```{r}
+WI <- as.data.frame(aggregate(rouen$Winkler_10, by = list(rouen$Annee), FUN = sum))
+colnames(WI)[1] <- c("Annee")
+colnames(WI)[2] <- c("Winckler")
+summary(WI)
+
+options(scipen=999)
+data("WI", package = "ggplot2")
+theme_set(theme_bw())
+
+ggplot (data = WI, aes(x = Annee, y = Winckler))+
+  geom_line(color="#822C64", size=0.5)+
+  stat_smooth(method="lm", se = FALSE, color="#822C64")+
+  stat_regline_equation(label.x=1970, label.y=1300)+
+  
+  annotate("rect", xmin = 1968, xmax = 2020, ymin = 1681, ymax = 1940,
+           alpha = .1,fill = "#3B5202")+
+  
+  labs(title = "Indice bioclimatique de Winckler\nà Rouen entre 1968 et 2020", x = "Années", y = "Indice de Winckler")+
+  theme(plot.title=element_text(hjust=0.5))
+```
+
+
+#Indice d'Huglin
+```{r}
+HI <- as.data.frame(aggregate(rouen$Huglin, by = list(rouen$Annee), FUN = sum))
+colnames(HI)[1] <- c("Annee")
+colnames(HI)[2] <- c("Huglin")
+summary(HI)
+
+options(scipen=999)
+data("HI", package = "ggplot2")
+theme_set(theme_bw())
+
+ggplot (data = HI, aes(x = Annee, y = Huglin))+
+  geom_line(color="#822C64", size=0.5)+
+  stat_smooth(method="lm", se = FALSE, color="#822C64")+
+  stat_regline_equation(label.x=1970, label.y=2000)+
+  
+  annotate("rect", xmin = 1968, xmax = 2020, ymin = 2100, ymax = 2199,
+           alpha = .1,fill = "#3B5202")+
+  
+  labs(title = "Indice bioclimatique d'Huglin\nà Rouen entre 1968 et 2020", x = "Années", y = "Indice d'Huglin")+
+  theme(plot.title=element_text(hjust=0.5))
+```
+
+
+#Indice GFV/GSR
+```{r}
+floraison <- rouen %>%
+  group_by(Annee = factor(Annee)) %>%
+  dplyr::filter(any(Floraison != 0)) %>%
+  dplyr::filter(Floraison != 0) %>%
+  arrange(Annee) %>%
+  slice(1) %>%
+  ungroup() %>%
+  complete(Annee)
+
+floraison <- cbind.data.frame(floraison$Annee, floraison$Floraison, floraison$JJ)
+colnames(floraison)[1:2] <- c("Annee", "Floraison", "JJ_floraison")
+summary(floraison)
+
+veraison <- rouen %>%
+  group_by(Annee = factor(Annee)) %>%
+  dplyr::filter(any(Veraison != 0)) %>%
+  dplyr::filter(Veraison != 0) %>%
+  arrange(Annee) %>%
+  slice(1) %>%
+  ungroup() %>%
+  complete(Annee)
+
+veraison <- cbind.data.frame(veraison$Annee, veraison$Veraison, veraison$JJ)
+colnames(veraison)[1:2] <- c("Annee", "Veraison", "JJ_veraison")
+summary(veraison)
+
+GSR_170 <- rouen %>%
+  group_by(Annee = factor(Annee)) %>%
+  dplyr::filter(any(GSR._170 != 0)) %>%
+  dplyr::filter(GSR._170 != 0) %>%
+  arrange(Annee) %>%
+  slice(1) %>%
+  ungroup() %>%
+  complete(Annee)
+
+GSR_170 <- cbind.data.frame(GSR_170$Annee, GSR_170$GSR._170, GSR_170$JJ)
+colnames(GSR_170)[1:2] <- c("Annee", "GSR_170", "JJ_170")
+summary(GSR_170)
+
+GSR_190 <- rouen %>%
+  group_by(Annee = factor(Annee)) %>%
+  dplyr::filter(any(GSR_190 != 0)) %>%
+  dplyr::filter(GSR_190 != 0) %>%
+  arrange(Annee) %>%
+  slice(1) %>%
+  ungroup() %>%
+  complete(Annee)
+
+GSR_190 <- cbind.data.frame(GSR_190$Annee, GSR_190$GSR_190, GSR_190$JJ)
+colnames(GSR_190)[1:2] <- c("Annee", "GSR_190", "JJ_190")
+summary(GSR_190)
+
+GSR_200 <- rouen %>%
+  group_by(Annee = factor(Annee)) %>%
+  dplyr::filter(any(GSR_200 != 0)) %>%
+  dplyr::filter(GSR_200 != 0) %>%
+  arrange(Annee) %>%
+  slice(1) %>%
+  ungroup() %>%
+  complete(Annee)
+
+GSR_200 <- cbind.data.frame(GSR_200$Annee, GSR_200$GSR_200, GSR_200$JJ)
+colnames(GSR_200)[1:2] <- c("Annee", "GSR_200", "JJ_200")
+summary(GSR_200)
+
+```
+
+```{R}
+I1 <- merge(floraison, veraison, by = "Annee")
+I2 <- merge(I1, GSR_170, by = "Annee")
+I3 <- merge(I2, GSR_190, by = "Annee")
+Index <- merge(I3, GSR_200, by = "Annee")
+
+Index$Annee <- as.numeric(as.character(Index$Annee))
+colnames(Index)[3] <- "floraison_JJ"
+colnames(Index)[5] <- "veraison_JJ"
+colnames(Index)[7] <- "GSR_170_JJ"
+colnames(Index)[9] <- "GSR_190_JJ"
+colnames(Index)[11] <- "GSR_200_JJ"
+
+summary(Index)
+View(Index)
+```
+
+
+```{R}
+#Pour la floraison/véraison
+options(scipen=999)
+data("Index", package = "ggplot2")
+theme_set(theme_bw())
+
+ggplot (data = Index, aes(x = Annee))+
+  geom_line(aes(y = floraison_JJ, colour = "Floraison"), size = 0.8)+
+  geom_line(aes(y = veraison_JJ, colour = "Véraison"), size = 0.8)+
+  
+  geom_smooth(aes(y = floraison_JJ, colour = "Floraison"),  method = "lm", se = FALSE) +
+  geom_smooth(aes(y = veraison_JJ, colour = "Véraison"), method = "lm", se = FALSE)+
+  labs(title = "Evolution des dates de début de véraison et de floraison\nà Rouen entre 1968 et 2020", x = "Années", y = "Jours Juliens")+
+  theme(plot.title=element_text(hjust=0.5))+
+  scale_color_manual(name = "Légende", breaks = c("Floraison", "Véraison"), values = c("#809F36", "#A45488"))
+
+
+#Pour le GSR
+ggplot (data = Index, aes(x = Annee))+
+  geom_line(aes(y = GSR_170_JJ, colour = "GSR_170"), size = 0.5)+
+  geom_line(aes(y = GSR_190_JJ, colour = "GSR_190"), size = 0.5)+
+  geom_line(aes(y = GSR_200_JJ, colour = "GSR_200"), size = 0.5)+
+  
+  geom_smooth(aes(y = GSR_170_JJ, colour = "GSR_170"),  method = "lm", se = FALSE)+
+  geom_smooth(aes(y = GSR_190_JJ, colour = "GSR_190"), method = "lm", se = FALSE)+
+  geom_smooth(aes(y = GSR_200_JJ, colour = "GSR_200"), method = "lm", se = FALSE)+
+  
+  labs(title = "Evolution des dates pour atteindre plusieurs exigences\nen maturité du grenache à Rouen entre 1968 et 2020", x = "Années", y = "Jours Juliens")+
+  theme(plot.title=element_text(hjust=0.5))+
+  scale_color_manual(name = "Légende", breaks = c("GSR_170", "GSR_190", "GSR_200"), values = c("#809F36", "#44857C", "#7B1620"))
+
+```
+
+======================================================================================================================================================================
+
+==========================
+#Evolution pour Montélimar 
+==========================
+
+#Ajout d'une variable avec les dates
+```{r}
+date <- as.Date(paste(montelimar$Annee, montelimar$Mois, montelimar$Jour, sep = "-"))
+montelimar <- cbind.data.frame(montelimar,date)
+```
+
+#Ajout les saisons
+```{r}
+saison <- factor(montelimar$Mois)
+levels(saison) <- c("H","H","P","P","P","E","E","E","A","A","A","H")
+montelimar <- cbind.data.frame(montelimar, saison)
+summary(montelimar)
+```
+
+#Ajout saison végétative
+```{r}
+veg <- factor(montelimar$Mois)
+levels(veg) <- c("HIV","HIV","HIV","VEG","VEG","VEG","VEG","VEG","VEG","VEG","HIV","HIV")
+montelimar <- cbind.data.frame(montelimar, veg)
+summary(montelimar)
+```
+
+#Visualisation variations temporelles température
+```{r}
+TX_moy2 <- as.data.frame(aggregate(montelimar$TX, by = list(montelimar$Annee), FUN = mean))
+colnames(TX_moy2)[1] <- c("Annee")
+colnames(TX_moy2)[2] <- c("Mean_TX")
+summary(TX_moy2)
+
+TN_moy2 <- as.data.frame(aggregate(montelimar$TN, by = list(montelimar$Annee), FUN = mean))
+colnames(TN_moy2)[1] <- c("Annee")
+colnames(TN_moy2)[2] <- c("Mean_TN")
+summary(TN_moy2)
+
+TM_moy2 <- as.data.frame(aggregate(montelimar$TM, by = list(montelimar$Annee), FUN = mean))
+colnames(TM_moy2)[1] <- c("Annee")
+colnames(TM_moy2)[2] <- c("Mean_TM")
+summary(TM_moy2)
+
+P_moy2 <- as.data.frame(aggregate(montelimar$P, by = list(montelimar$Annee), FUN = mean))
+colnames(P_moy2)[1] <- c("Annee")
+colnames(P_moy2)[2] <- c("Mean_P")
+summary(P_moy2)
+
+T_montelimar <- merge(TX_moy2, TN_moy2, by = "Annee")
+T2_montelimar <- merge(T_montelimar, TM_moy2, by = "Annee")
+T_moy2 <- merge(T2_montelimar, P_moy2, by = "Annee")
+summary(T_moy2)
+```
+
+```{r}
+#Graphe températures
+options(scipen=999)
+data("T_moy2", package = "ggplot2")
+theme_set(theme_bw())
+
+ggplot (data = T_moy2, aes(x = Annee))+
+  geom_line(aes(y = Mean_TX, colour = "TempMax"), size = 0.8)+
+  geom_line(aes(y = Mean_TM, colour = "TempMoyen"), size = 0.8)+
+  geom_line(aes(y = Mean_TN, colour = "TempMin"), size = 0.8)+
+  geom_smooth(aes(y = Mean_TX, colour = "TempMax"),  method = "lm", se = FALSE) +
+  geom_smooth(aes(y = Mean_TM, colour = "TempMoyen"), method = "lm", se = FALSE)+
+  geom_smooth(aes(y = Mean_TN, colour = "TempMin"), method = "lm", se = FALSE)+
+  labs(title = "Températures annuelles à\nMontélimar entre 1950 et 2020", x = "Années", y = "Températures (en °C)")+
+  theme(plot.title=element_text(hjust=0.5))+
+  scale_color_manual(name = "Légende", breaks = c("TempMax", "TempMoyen", "TempMin"), values = c("#A33741", "#A45488", "#D4986D"))
+
+#Juste les précipitations
+ggplot (data = T_moy2, aes(x = Annee, y = Mean_P))+
+  geom_line(color="#246A60", size=0.5)+
+  stat_smooth(method="lm", se = FALSE)+
+  stat_regline_equation(label.x=1965, label.y=4)+
+  labs(title = "Précipitations annuelles à\nMontélimar entre 1950 et 2020", x = "Années", y = "Précipitations (en mm)")+
+  theme(plot.title=element_text(hjust=0.5))
+
+
+#Double graphe températures moyennes - précipitations
+temperatureColor <- "#A45488"
+precipitationColor <- "#246A60"
+coeff <- 5
+
+ggplot(T_moy2, aes(x=Annee)) +
+  geom_line(aes(y=Mean_TM), size=0.8, color=temperatureColor) + 
+  geom_line(aes(y=Mean_P*coeff), size=0.3, color=precipitationColor) +
+  scale_y_continuous(name = "Temperature (en °C)", sec.axis = sec_axis(~./coeff, name="Précipitations (en mm)")) + 
+  theme_ipsum() +
+  labs(title = "Températures et précipitations annuelles\nà Montélimar entre 1950 et 2020")+
+  theme(
+    plot.title=element_text(hjust=0.5),
+    axis.title.y = element_text(color = temperatureColor, size=13),
+    axis.title.y.right = element_text(color = precipitationColor, size=10)
+  )
+```
+
+#Nombre de jours de gels printaniers
+```{r}
+summary(montelimar)
+gel2 <- as.data.frame(aggregate(montelimar$Gel, by = list(montelimar$Annee), FUN = sum))
+colnames(gel2)[1] <- c("Annee")
+colnames(gel2)[2] <- c("Somme_Gel")
+summary(gel2)
+```
+
+#Nombre de jours de valeurs létales (< -25°C)
+```{r}
+letal2 <- as.data.frame(aggregate(montelimar$valeur_letale, by = list(montelimar$Annee), FUN = sum))
+colnames(letal2)[1] <- c("Annee")
+colnames(letal2)[2] <- c("Somme_letal")
+summary(letal2)
+```
+
+#Nombre de jours de vagues de chaleur (>25°C)
+```{r}
+vague2 <- as.data.frame(aggregate(montelimar$V_chaleur, by = list(montelimar$Annee), FUN = sum))
+colnames(vague2)[1] <- c("Annee")
+colnames(vague2)[2] <- c("Somme_vague")
+summary(vague2)
+```
+
+#Nombre de jour de stress thermique (>30°C)
+```{r}
+stress2 <- as.data.frame(aggregate(montelimar$stress_thermique, by = list(montelimar$Annee), FUN = sum))
+colnames(stress2)[1] <- c("Annee")
+colnames(stress2)[2] <- c("Somme_stress")
+summary(stress2)
+```
+
+#Nombre de jour de températures excessives (>35°C)
+```{r}
+excessif2 <- as.data.frame(aggregate(montelimar$T_excessif, by = list(montelimar$Annee), FUN = sum))
+colnames(excessif2)[1] <- c("Annee")
+colnames(excessif2)[2] <- c("Somme_T_excessif")
+summary(excessif2)
+```
+
+#Nombre de jours de pluie
+```{r}
+J_pluie2 <- as.data.frame(aggregate(montelimar$J_Pluie, by = list(montelimar$Annee), FUN = sum))
+colnames(J_pluie2)[1] <- c("Annee")
+colnames(J_pluie2)[2] <- c("Somme_J_pluie")
+summary(J_pluie2)
+```
+
+#Merge
+```{r}
+M1_m <- merge(P_moy2, gel2, by = "Annee")
+M2_m <- merge(M1_m, letal2, by = "Annee")
+M3_m <- merge(M2_m, vague2, by = "Annee")
+M4_m <- merge(M3_m, stress2, by = "Annee")
+M5_m <- merge(M4_m, excessif2, by = "Annee")
+Mfinal2 <- merge(M5_m, J_pluie2, by = "Annee")
+
+summary(Mfinal2)
+```
+
+#Visualisation
+```{r}
+#Visualisation pour les températures
+options(scipen=999)
+data("Mfinal2", package = "ggplot2")
+theme_set(theme_bw())
+
+
+ggplot (data = Mfinal2, aes(x = Annee))+
+  geom_line(aes(y = Somme_Gel, colour = "Nombre de jours de gel"), size = 0.5)+
+  geom_line(aes(y = Somme_vague, colour = "Nombre de jours où T > 25°C"), size = 0.5)+
+  geom_line(aes(y = Somme_stress, colour = "Nombre de jours où T > 30°C"), size = 0.5)+
+  geom_line(aes(y = Somme_T_excessif, colour = "Nombre de jours où T > 35°C"), size = 0.5)+
+  
+  geom_smooth(aes(y = Somme_Gel, colour = "Nombre de jours de gel"),  method = "lm", se = FALSE, size = 0.5)+
+  geom_smooth(aes(y = Somme_stress, colour = "Nombre de jours où T > 30°C"),  method = "lm", se = FALSE, size = 0.5)+
+  geom_smooth(aes(y = Somme_vague, colour = "Nombre de jours où T > 25°C"),  method = "lm", se = FALSE, size = 0.5)+
+
+  
+  labs(title = "Nombre de jours aux températures\nextrêmes à Montélimar entre 1950 et 2020", x = "Années", y = "Jours")+
+  theme(plot.title=element_text(hjust=0.5))+
+  scale_color_manual(name = "Légende", breaks = c("Nombre de jours de gel", "Nombre de jours où T > 25°C", "Nombre de jours où T > 30°C", "Nombre de jours où T > 35°C"), values = c("#44857C", "#809F36", "#822C64", "#A33741"))
+```
+
+```{r}
+#Visualisation pour les précipitations
+jourColor <- "#809F36"
+precipitationColor <- "#44857C"
+coeff <- 20
+
+ggplot(Mfinal2, aes(x=Annee)) +
+  geom_line(aes(y=Mean_P), size=0.8, color=temperatureColor) + 
+  geom_line(aes(y=Somme_J_pluie/coeff), size=0.3, color=precipitationColor) +
+  scale_y_continuous(name = "Précipitations (en mm)", sec.axis = sec_axis(~.*coeff, name="Nombre de jour de pluie")) + 
+  geom_smooth(aes(y = Mean_P),  method = "lm", se = FALSE, size = 0.5, color=temperatureColor)+
+  geom_smooth(aes(y = Somme_J_pluie/coeff),  method = "lm", se = FALSE, size = 0.5, color=precipitationColor)+
+  
+  theme_ipsum() +
+  labs(title = "Précipitations et nombre de jour de pluie\nà Montélimar entre 1950 et 2020")+
+  theme(
+    plot.title=element_text(hjust=0.5),
+    axis.title.y = element_text(color = temperatureColor, size=13),
+    axis.title.y.right = element_text(color = precipitationColor, size=10)
+  )
+```
+
+#Indice de Winkler
+```{r}
+WI2 <- as.data.frame(aggregate(montelimar$Winkler_10, by = list(montelimar$Annee), FUN = sum))
+colnames(WI2)[1] <- c("Annee")
+colnames(WI2)[2] <- c("Winckler")
+summary(WI2)
+
+options(scipen=999)
+data("WI2", package = "ggplot2")
+theme_set(theme_bw())
+
+ggplot (data = WI2, aes(x = Annee, y = Winckler))+
+  geom_line(color="#822C64", size=0.5)+
+  stat_smooth(method="lm", se = FALSE, color="#822C64")+
+  stat_regline_equation(label.x=1960, label.y=2100)+
+  
+  annotate("rect", xmin = 1950, xmax = 2020, ymin = 1681, ymax = 1940,
+           alpha = .1,fill = "#3B5202")+
+  
+  labs(title = "Indice bioclimatique de Winckler\nà Montélimar entre 1950 et 2020", x = "Années", y = "Indice de Winckler")+
+  theme(plot.title=element_text(hjust=0.5))
+```
+
+
+#Indice d'Huglin
+```{r}
+HI2 <- as.data.frame(aggregate(montelimar$Huglin, by = list(montelimar$Annee), FUN = sum))
+colnames(HI2)[1] <- c("Annee")
+colnames(HI2)[2] <- c("Huglin")
+summary(HI2)
+
+options(scipen=999)
+data("HI2", package = "ggplot2")
+theme_set(theme_bw())
+
+ggplot (data = HI2, aes(x = Annee, y = Huglin))+
+  geom_line(color="#822C64", size=0.5)+
+  stat_smooth(method="lm", se = FALSE, color="#822C64")+
+  stat_regline_equation(label.x=1950, label.y=2600)+
+  
+  annotate("rect", xmin = 1950, xmax = 2020, ymin = 2100, ymax = 2199,
+           alpha = .1,fill = "#3B5202")+
+  
+  labs(title = "Indice bioclimatique d'Huglin\nà Montélimar entre 1950 et 2020", x = "Années", y = "Indice d'Huglin")+
+  theme(plot.title=element_text(hjust=0.5))
+```
+
+#Indice GFV/GSR
+```{r}
+floraison <- montelimar %>%
+  group_by(Annee = factor(Annee)) %>%
+  dplyr::filter(any(Floraison != 0)) %>%
+  dplyr::filter(Floraison != 0) %>%
+  arrange(Annee) %>%
+  slice(1) %>%
+  ungroup() %>%
+  complete(Annee)
+
+floraison <- cbind.data.frame(floraison$Annee, floraison$Floraison, floraison$JJ)
+colnames(floraison)[1:2] <- c("Annee", "Floraison2", "JJ_floraison2")
+summary(floraison)
+
+veraison <- montelimar %>%
+  group_by(Annee = factor(Annee)) %>%
+  dplyr::filter(any(Veraison != 0)) %>%
+  dplyr::filter(Veraison != 0) %>%
+  arrange(Annee) %>%
+  slice(1) %>%
+  ungroup() %>%
+  complete(Annee)
+
+veraison <- cbind.data.frame(veraison$Annee, veraison$Veraison, veraison$JJ)
+colnames(veraison)[1:2] <- c("Annee", "Veraison2", "JJ_veraison2")
+summary(veraison)
+
+GSR_170 <- montelimar %>%
+  group_by(Annee = factor(Annee)) %>%
+  dplyr::filter(any(GSR._170 != 0)) %>%
+  dplyr::filter(GSR._170 != 0) %>%
+  arrange(Annee) %>%
+  slice(1) %>%
+  ungroup() %>%
+  complete(Annee)
+
+GSR_170 <- cbind.data.frame(GSR_170$Annee, GSR_170$GSR._170, GSR_170$JJ)
+colnames(GSR_170)[1:2] <- c("Annee", "GSR_170_2", "JJ_170_2")
+summary(GSR_170)
+
+GSR_190 <- montelimar %>%
+  group_by(Annee = factor(Annee)) %>%
+  dplyr::filter(any(GSR_190 != 0)) %>%
+  dplyr::filter(GSR_190 != 0) %>%
+  arrange(Annee) %>%
+  slice(1) %>%
+  ungroup() %>%
+  complete(Annee)
+
+GSR_190 <- cbind.data.frame(GSR_190$Annee, GSR_190$GSR_190, GSR_190$JJ)
+colnames(GSR_190)[1:2] <- c("Annee", "GSR_190_2", "JJ_190_2")
+summary(GSR_190)
+
+GSR_200 <- montelimar %>%
+  group_by(Annee = factor(Annee)) %>%
+  dplyr::filter(any(GSR_200 != 0)) %>%
+  dplyr::filter(GSR_200 != 0) %>%
+  arrange(Annee) %>%
+  slice(1) %>%
+  ungroup() %>%
+  complete(Annee)
+
+GSR_200 <- cbind.data.frame(GSR_200$Annee, GSR_200$GSR_200, GSR_200$JJ)
+colnames(GSR_200)[1:2] <- c("Annee", "GSR_200_2", "JJ_200_2")
+summary(GSR_200)
+
+```
+
+```{R}
+I1 <- merge(floraison, veraison, by = "Annee")
+I2 <- merge(I1, GSR_170, by = "Annee")
+I3 <- merge(I2, GSR_190, by = "Annee")
+Index2 <- merge(I3, GSR_200, by = "Annee")
+
+Index2$Annee <- as.numeric(as.character(Index2$Annee))
+colnames(Index2)[3] <- "floraison_JJ_2"
+colnames(Index2)[5] <- "veraison_JJ_2"
+colnames(Index2)[7] <- "GSR_170_JJ_2"
+colnames(Index2)[9] <- "GSR_190_JJ_2"
+colnames(Index2)[11] <- "GSR_200_JJ_2"
+
+summary(Index2)
+View(Index2)
+```
+
+
+```{R}
+#Pour la floraison/véraison
+options(scipen=999)
+data("Index2", package = "ggplot2")
+theme_set(theme_bw())
+
+ggplot (data = Index2, aes(x = Annee))+
+  geom_line(aes(y = floraison_JJ_2, colour = "Floraison"), size = 0.8)+
+  geom_line(aes(y = veraison_JJ_2, colour = "Véraison"), size = 0.8)+
+  
+  geom_smooth(aes(y = floraison_JJ_2, colour = "Floraison"),  method = "lm", se = FALSE) +
+  geom_smooth(aes(y = veraison_JJ_2, colour = "Véraison"), method = "lm", se = FALSE)+
+  labs(title = "Evolution des dates de début de véraison et de floraison\nà Montélimar entre 1950 et 2020", x = "Années", y = "Jours Juliens")+
+  theme(plot.title=element_text(hjust=0.5))+
+  scale_color_manual(name = "Légende", breaks = c("Floraison", "Véraison"), values = c("#809F36", "#A45488"))
+
+
+#Pour le GSR
+ggplot (data = Index2, aes(x = Annee))+
+  geom_line(aes(y = GSR_170_JJ_2, colour = "GSR_170"), size = 0.5)+
+  geom_line(aes(y = GSR_190_JJ_2, colour = "GSR_190"), size = 0.5)+
+  geom_line(aes(y = GSR_200_JJ_2, colour = "GSR_200"), size = 0.5)+
+  
+  geom_smooth(aes(y = GSR_170_JJ_2, colour = "GSR_170"),  method = "lm", se = FALSE)+
+  geom_smooth(aes(y = GSR_190_JJ_2, colour = "GSR_190"), method = "lm", se = FALSE)+
+  geom_smooth(aes(y = GSR_200_JJ_2, colour = "GSR_200"), method = "lm", se = FALSE)+
+  
+  labs(title = "Evolution des dates pour atteindre plusieurs exigences\nen maturité du grenache à Montélimar entre 1950 et 2020", x = "Années", y = "Jours Juliens")+
+  theme(plot.title=element_text(hjust=0.5))+
+  scale_color_manual(name = "Légende", breaks = c("GSR_170", "GSR_190", "GSR_200"), values = c("#809F36", "#44857C", "#7B1620"))
+```
+
+
+
+======================================================================================================================================================================
+
+==========================
+#Comparaison Montélimar / Rouen 
+==========================
+
+```{r}
+eruption.lm = lm(Annee ~ Mean_P.x, data=T_moy_total)
+
+summary(eruption.lm)$r.squared 
+```
+
+```{r}
+#Cbind data
+T_moy_total <- merge(T_moy, T_moy2, by = "Annee")
+summary(T_moy_total)
+
+#Graphe températures
+options(scipen=999)
+data("T_moy_total", package = "ggplot2")
+theme_set(theme_bw())
+
+ggplot (data = T_moy_total, aes(x = Annee))+
+  geom_line(aes(y = Mean_TX.x, colour = "TempMax"), size = 0.5)+
+  geom_line(aes(y = Mean_TM.x, colour = "TempMoyen"), size = 0.5)+
+  geom_line(aes(y = Mean_TN.x, colour = "TempMin"), size = 0.5)+
+  geom_line(aes(y = Mean_TX.y, colour = "TempMax"), size = 0.8)+
+  geom_line(aes(y = Mean_TM.y, colour = "TempMoyen"), size = 0.8)+
+  geom_line(aes(y = Mean_TN.y, colour = "TempMin"), size = 0.8)+
+  
+  geom_smooth(aes(y = Mean_TX.x, colour = "TempMax", linetype = "longdash"),  method = "lm", se = FALSE, size = 0.5, linetype = "longdash") +
+  geom_smooth(aes(y = Mean_TM.x, colour = "TempMoyen", linetype = "longdash"), method = "lm", se = FALSE, size = 0.5, linetype = "longdash")+
+  geom_smooth(aes(y = Mean_TN.x, colour = "TempMin", linetype = "longdash"), method = "lm", se = FALSE, size = 0.5, linetype = "longdash")+
+  geom_smooth(aes(y = Mean_TX.y, colour = "TempMax"),  method = "lm", se = FALSE) +
+  geom_smooth(aes(y = Mean_TM.y, colour = "TempMoyen"), method = "lm", se = FALSE)+
+  geom_smooth(aes(y = Mean_TN.y, colour = "TempMin"), method = "lm", se = FALSE)+
+  
+  labs(title = "Températures annuelles à\nMontélimar et Rouen entre 1968 et 2020", x = "Années", y = "Températures (en °C)")+
+  theme(plot.title=element_text(hjust=0.5))+
+  
+  scale_color_manual(name = "Légende", breaks = c("TempMax", "TempMoyen", "TempMin"), values = c("#A33741", "#A45488", "#D4986D"))
+
+
+
+#Juste les précipitations
+ggplot (data = T_moy_total, aes(x = Annee))+
+  geom_line(aes(y = Mean_P.x, colour = "Rouen"), size = 0.5)+
+  geom_smooth(aes(y = Mean_P.x, colour = "Rouen", linetype = "longdash"),  method = "lm", se = FALSE, size = 0.5, linetype = "longdash")+
+  geom_line(aes(y = Mean_P.y, colour = "Montélimar"), size = 0.5)+
+  geom_smooth(aes(y = Mean_P.y, colour = "Montélimar"),  method = "lm", se = FALSE, size = 0.5)+
+  labs(title = "Précipitations annuelles à\nMontélimar et Rouen entre 1968 et 2020", x = "Années", y = "Précipitations (en mm)")+
+  theme(plot.title=element_text(hjust=0.5))+
+  scale_color_manual(name = "Légende", breaks = c("Rouen","Montélimar"), values = c("#44857C", "#D4986D"))
+```
+
+
+```{r}
+eruption.lm = lm(Annee ~ Somme_T_excessif.y, data=Mtotal)
+
+summary(eruption.lm)$r.squared 
+```
+
+#Visualisation T extrêmes
+```{r}
+#Cbind data
+Mtotal <- merge(Mfinal, Mfinal2, by = "Annee")
+summary(Mtotal)
+
+#Graphe températures
+options(scipen=999)
+data("Mtotal", package = "ggplot2")
+theme_set(theme_bw())
+
+ggplot (data = Mtotal, aes(x = Annee))+
+  geom_line(aes(y = Somme_Gel.x, colour = "Rouen"), size = 0.5)+
+  geom_smooth(aes(y = Somme_Gel.x, colour = "Rouen"), method = "lm", se = FALSE, size = 0.5) +
+  
+  geom_line(aes(y = Somme_Gel.y, colour = "Montélimar"), size = 0.5)+
+  geom_smooth(aes(y = Somme_Gel.y, colour = "Montélimar"),  method = "lm", se = FALSE, size = 0.5) +
+  
+  labs(title = "Nombre de jour avec de Gel à\nMontélimar et Rouen entre 1968 et 2020", x = "Années", y = "Jours")+
+  theme(plot.title=element_text(hjust=0.5))+
+  
+  scale_color_manual(name = "Légende", breaks = c("Rouen", "Montélimar"), values = c("#44857C", "#D4986D")) 
+  
+  
+ggplot (data = Mtotal, aes(x = Annee))+
+  geom_line(aes(y = Somme_vague.x, colour = "Rouen"), size = 0.5)+
+  geom_smooth(aes(y = Somme_vague.x, colour = "Rouen"), method = "lm", se = FALSE, size = 0.5) +
+  
+  geom_line(aes(y = Somme_vague.y, colour = "Montélimar"), size = 0.5)+
+  geom_smooth(aes(y = Somme_vague.y, colour = "Montélimar"),  method = "lm", se = FALSE, size = 0.5) +
+  
+  labs(title = "Nombre de jour de vagues de chaleur à\nMontélimar et Rouen entre 1968 et 2020", x = "Années", y = "Jours")+
+  theme(plot.title=element_text(hjust=0.5))+
+  
+  scale_color_manual(name = "Légende", breaks = c("Rouen", "Montélimar"), values = c("#44857C", "#D4986D")) 
+  
+  
+  
+ggplot (data = Mtotal, aes(x = Annee))+
+  geom_line(aes(y = Somme_stress.x, colour = "Rouen"), size = 0.5)+
+  geom_smooth(aes(y = Somme_stress.x, colour = "Rouen"), method = "lm", se = FALSE, size = 0.5) +
+  
+  geom_line(aes(y = Somme_stress.y, colour = "Montélimar"), size = 0.5)+
+  geom_smooth(aes(y = Somme_stress.y, colour = "Montélimar"),  method = "lm", se = FALSE, size = 0.5) +
+  
+  labs(title = "Nombre de jour de stress thermique à\nMontélimar et Rouen entre 1968 et 2020", x = "Années", y = "Jours")+
+  theme(plot.title=element_text(hjust=0.5))+
+  
+  scale_color_manual(name = "Légende", breaks = c("Rouen", "Montélimar"), values = c("#44857C", "#D4986D")) 
+  
+  
+  
+  
+ggplot (data = Mtotal, aes(x = Annee))+
+  geom_line(aes(y = Somme_T_excessif.x, colour = "Rouen"), size = 0.5)+
+  geom_smooth(aes(y = Somme_T_excessif.x, colour = "Rouen"), method = "lm", se = FALSE, size = 0.5) +
+  
+  geom_line(aes(y = Somme_T_excessif.y, colour = "Montélimar"), size = 0.5)+
+  geom_smooth(aes(y = Somme_T_excessif.y, colour = "Montélimar"),  method = "lm", se = FALSE, size = 0.5) +
+  
+  labs(title = "Nombre de jour aux températures excessives à\nMontélimar et Rouen entre 1968 et 2020", x = "Années", y = "Jours")+
+  theme(plot.title=element_text(hjust=0.5))+
+  
+  scale_color_manual(name = "Légende", breaks = c("Rouen", "Montélimar"), values = c("#44857C", "#D4986D"))
+```
+
+
+#Visualisation Jours P
+```{r}
+options(scipen=999)
+data("Mtotal", package = "ggplot2")
+theme_set(theme_bw())
+
+ggplot (data = Mtotal, aes(x = Annee))+
+  geom_line(aes(y = Mean_P.x, colour = "Rouen"), size = 0.7)+
+  geom_smooth(aes(y = Mean_P.x, colour = "Rouen"), method = "lm", se = FALSE, size = 0.7) +
+  
+  geom_line(aes(y = Mean_P.y, colour = "Montélimar"), size = 0.5)+
+  geom_smooth(aes(y = Mean_P.y, colour = "Montélimar"),  method = "lm", se = FALSE, size = 0.5) +
+  
+  labs(title = "Nombre de jour de pluie à\nMontélimar et Rouen entre 1968 et 2020", x = "Années", y = "Jours")+
+  theme(plot.title=element_text(hjust=0.5))+
+  
+  scale_color_manual(name = "Légende", breaks = c("Rouen", "Montélimar"), values = c("#822C64", "#809F36"))
+ 
+```
+
+```{r}
+eruption.lm = lm(Annee ~ Winckler.y, data=WI_final)
+
+summary(eruption.lm)$r.squared 
+```
+
+#Indice de Winkler
+```{r}
+WI_final <- merge(WI, WI2, by = "Annee")
+summary(WI_final)
+
+options(scipen=999)
+data("WI_final", package = "ggplot2")
+theme_set(theme_bw())
+
+ggplot (data = WI_final, aes(x = Annee))+
+  geom_line(aes(y=Winckler.x, color="Rouen"), size=0.5)+
+  geom_line(aes(y=Winckler.y, color="Montélimar"), size=0.5)+
+  annotate("rect", xmin = 1968, xmax = 2020, ymin = 1681, ymax = 1940,
+           alpha = .1,fill = "#3B5202")+
+  
+  labs(title = "Indice bioclimatique de Winckler\nà Montélimar et Rouen entre 1968 et 2020", x = "Années", y = "Indice de Winckler")+
+  theme(plot.title=element_text(hjust=0.5))+
+  
+  scale_color_manual(name = "Légende", breaks = c("Rouen", "Montélimar"), values = c("#822C64", "#44857C"))
+```
+
+```{r}
+eruption.lm = lm(Annee ~ Huglin.y, data=HI_final)
+
+summary(eruption.lm)$r.squared 
+```
+
+
+#Indice d'Huglin
+```{r}
+HI_final <- merge(HI, HI2, by = "Annee")
+summary(HI_final)
+
+options(scipen=999)
+data("HI_final", package = "ggplot2")
+theme_set(theme_bw())
+
+ggplot (data = HI_final, aes(x = Annee))+
+  geom_line(aes(y=Huglin.x, color="Rouen"), size=0.5)+
+  geom_line(aes(y=Huglin.y, color="Montélimar"), size=0.5)+
+  annotate("rect", xmin = 1968, xmax = 2020, ymin = 2100, ymax = 2199,
+           alpha = .1,fill = "#3B5202")+
+  
+  labs(title = "Indice bioclimatique d'Huglin\nà Montélimar et Rouen entre 1968 et 2020", x = "Années", y = "Indice d'Huglin")+
+  theme(plot.title=element_text(hjust=0.5))+
+  
+  scale_color_manual(name = "Légende", breaks = c("Rouen", "Montélimar"), values = c("#822C64", "#44857C"))
+
+```
+
+```{r}
+eruption.lm = lm(Annee ~ GSR_200_JJ, data=Index_final)
+
+summary(eruption.lm)$r.squared 
+```
+
+#Indice GFV-GSR
+```{r}
+Index_final <- merge(Index, Index2, by = "Annee")
+summary(Index_final)
+
+options(scipen=999)
+data("HI_final", package = "ggplot2")
+theme_set(theme_bw())
+
+#Indices GFv
+ggplot (data = Index_final, aes(x = Annee))+
+  geom_line(aes(y = floraison_JJ, colour = "Floraison"), size = 0.8, linetype = "dashed")+
+  geom_line(aes(y = veraison_JJ, colour = "Véraison"), size = 0.8, linetype = "dashed")+
+  geom_line(aes(y = floraison_JJ_2, colour = "Floraison"), size = 0.8)+
+  geom_line(aes(y = veraison_JJ_2, colour = "Véraison"), size = 0.8)+
+  
+  geom_smooth(aes(y = floraison_JJ, colour = "Floraison"),  method = "lm", se = FALSE, linetype = "dashed") +
+  geom_smooth(aes(y = veraison_JJ, colour = "Véraison"), method = "lm", se = FALSE, linetype = "dashed")+
+  geom_smooth(aes(y = floraison_JJ_2, colour = "Floraison"),  method = "lm", se = FALSE) +
+  geom_smooth(aes(y = veraison_JJ_2, colour = "Véraison"), method = "lm", se = FALSE)+
+  
+  labs(title = "Evolution des dates de début de véraison et de floraison\nà Rouen et Montélimar entre 1968 et 2020", x = "Années", y = "Jours Juliens")+
+  theme(plot.title=element_text(hjust=0.5))+
+  scale_color_manual(name = "Légende", breaks = c("Floraison", "Véraison"), values = c("#809F36", "#A45488"))
+
+#Indice GSR
+ggplot (data = Index_final, aes(x = Annee))+
+  geom_line(aes(y = GSR_170_JJ, colour = "GSR_170"), size = 0.5, linetype = "dashed")+
+  geom_line(aes(y = GSR_190_JJ, colour = "GSR_190"), size = 0.5, linetype = "dashed")+
+  geom_line(aes(y = GSR_200_JJ, colour = "GSR_200"), size = 0.5, linetype = "dashed")+
+  geom_line(aes(y = GSR_170_JJ_2, colour = "GSR_170"), size = 0.5)+
+  geom_line(aes(y = GSR_190_JJ_2, colour = "GSR_190"), size = 0.5)+
+  geom_line(aes(y = GSR_200_JJ_2, colour = "GSR_200"), size = 0.5)+
+  
+  geom_smooth(aes(y = GSR_170_JJ, colour = "GSR_170"),  method = "lm", se = FALSE, linetype = "dashed")+
+  geom_smooth(aes(y = GSR_190_JJ, colour = "GSR_190"), method = "lm", se = FALSE, linetype = "dashed")+
+  geom_smooth(aes(y = GSR_200_JJ, colour = "GSR_200"), method = "lm", se = FALSE, linetype = "dashed")+
+  geom_smooth(aes(y = GSR_170_JJ_2, colour = "GSR_170"),  method = "lm", se = FALSE)+
+  geom_smooth(aes(y = GSR_190_JJ_2, colour = "GSR_190"), method = "lm", se = FALSE)+
+  geom_smooth(aes(y = GSR_200_JJ_2, colour = "GSR_200"), method = "lm", se = FALSE)+
+  
+  labs(title = "Evolution des dates pour atteindre plusieurs exigences\nen maturité du grenache à Rouen et Montélimar entre 1968 et 2020", x = "Années", y = "Jours Juliens")+
+  theme(plot.title=element_text(hjust=0.5))+
+  scale_color_manual(name = "Légende", breaks = c("GSR_170", "GSR_190", "GSR_200"), values = c("#809F36", "#44857C", "#7B1620"))
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
